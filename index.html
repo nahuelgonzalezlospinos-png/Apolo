@@ -1,0 +1,168 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>NEXPOOL</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #eaf6fa;
+    color: #123b50;
+    text-align: center;
+  }
+
+  header {
+    background: #087eaa;
+    color: white;
+    padding: 25px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 32px;
+  }
+
+  main {
+    max-width: 450px;
+    margin: 30px auto;
+    padding: 20px;
+  }
+
+  .panel {
+    background: white;
+    padding: 25px;
+    margin: 18px 0;
+    border-radius: 15px;
+    box-shadow: 0 3px 12px #00000015;
+  }
+
+  .valor {
+    font-size: 35px;
+    font-weight: bold;
+    color: #087eaa;
+  }
+
+  button {
+    background: #087eaa;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 15px 25px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  #estado {
+    margin-top: 15px;
+    font-weight: bold;
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>NEXPOOL</h1>
+  <p>Sistema inteligente de piscina</p>
+</header>
+
+<main>
+
+  <button onclick="conectar()">Conectar ESP32-CAM</button>
+
+  <p id="estado">Desconectado</p>
+
+  <div class="panel">
+    <h2>Nivel de luz</h2>
+    <div class="valor" id="luz">---</div>
+    <p>Lectura del sensor de iluminación</p>
+  </div>
+
+  <div class="panel">
+    <h2>Estado del agua</h2>
+    <div class="valor" id="agua">---</div>
+  </div>
+
+</main>
+
+<script>
+const SERVICE_UUID =
+  "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+
+const CHARACTERISTIC_UUID =
+  "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+let dispositivo;
+
+async function conectar() {
+  try {
+    document.getElementById("estado").textContent =
+      "Buscando NEXPOOL...";
+
+    dispositivo = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "ESP32_CAM_Control" }],
+      optionalServices: [SERVICE_UUID]
+    });
+
+    dispositivo.addEventListener(
+      "gattserverdisconnected",
+      () => {
+        document.getElementById("estado").textContent =
+          "Desconectado";
+      }
+    );
+
+    const servidor = await dispositivo.gatt.connect();
+
+    const servicio = await servidor.getPrimaryService(
+      SERVICE_UUID
+    );
+
+    const caracteristica = await servicio.getCharacteristic(
+      CHARACTERISTIC_UUID
+    );
+
+    await caracteristica.startNotifications();
+
+    caracteristica.addEventListener(
+      "characteristicvaluechanged",
+      recibirDatos
+    );
+
+    document.getElementById("estado").textContent =
+      "Conectado a NEXPOOL";
+
+  } catch (error) {
+    document.getElementById("estado").textContent =
+      "Error: " + error.message;
+  }
+}
+
+function recibirDatos(event) {
+  const datos = new TextDecoder().decode(
+    event.target.value
+  );
+
+  const luz = datos.match(/LUZ:(\d+)/);
+  const agua = datos.match(/AGUA:(\d+)/);
+
+  if (luz) {
+    document.getElementById("luz").textContent = luz[1];
+  }
+
+  if (agua) {
+    document.getElementById("agua").textContent =
+      agua[1] === "1"
+      ? "Hay agua en la piscina"
+      : "No hay agua en la piscina";
+  }
+}
+</script>
+
+</body>
+</html>
